@@ -188,8 +188,8 @@ lineCurrent=1
 
 while [ $lineCurrent -le $lineTotal ]; do
 
-  sed -n "$lineCurrent p" $2 \
-| sed "s/^/object network $1$lineCurrent\# subnet\ /" \
+  sed -n "$lineCurrent p" $Authority.cidr \
+| sed "s/^/object network $Authority$lineCurrent\# subnet\ /" \
 | sed -e "s/\/0/\ 0\.0\.0\.0/" \
 | sed -e "s/\/1/\ 128\.0\.0\.0/" \
 | sed -e "s/\/2/\ 192\.0\.0\.0/" \
@@ -239,13 +239,15 @@ lineCurrent=1
 
 while [ $lineCurrent -le $lineTotal ]; do
 
-
+  echo network-object object $Authority$lineCurrent >> $Authority.conf
 
   ((lineCurrent++))
 
 done
 
 # END Group Object Loop
+
+echo end >> $Authority.conf
 
 echo "Creation of $Authority.cidr has finished."
 
@@ -290,4 +292,3 @@ AcquireList
 SetAuthority
 ConvertAuthorityListToCIDR
 ConvertCIDRtoConfig
-
