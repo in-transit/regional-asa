@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# regional-asa.sh,v0.3b
+
 # This will take a file from an IANA established authroity (i.e. ARIN, AfriNIC,
 # RIPE, etc) and covert the entire file to CIDR notation where possible. Some
 # of the authorities have subnets borken down into non-CIDR possible notation
@@ -107,12 +109,120 @@ esac
 
 }
 
+function SelectCountry {
+
+  echo ""
+  read -p "Please enter the name or part of the country's english name. " SearchCountry
+
+  IFS=$'\n'
+  Results=( $(grep -i $SearchCountry country.list) )
+
+  for (( i = 0; i < ${#Results[@]}; i++ ))
+  do
+    echo $i " : " ${Results[$i]}
+  done
+
+  echo $i " : " None of the above
+
+  echo "Please select the nubmer associated with the country you desire."
+  read -p "[0-$i]? " PickCountry
+
+  if [[ $PickCountry -eq $i ]]
+  then
+
+    SpecifyCountry
+
+  fi
+
+  if [[ $PickCountry -lt $i ]]
+  then
+
+    Country=$(echo ${Results[$PickCountry]})
+    echo "You have selected: " $Country
+    CountryShortName=$(echo $Country | awk '{ print $1 }' )
+    echo $CountryShortName
+  fi
+
+}
+
+function SpecifyCountry {
+
+  echo ""
+  echo "Would you like to specify a country?"
+  read -p "[y/n]? " SpecifyCountry
+
+  if [[ "$SpecifyCountry" == "y" || "$SpecifyCountry" == "Y" ]]
+  then
+
+    SelectCountry
+
+  else
+    exit
+  fi
+
+}
+
 function ConvertAuthorityListToCIDR {
 
-## TODO: Update the function here to include the authority specific grep
-## messages.
-
 echo "Creation of $Authority.cidr has started."
+
+if [[ "$SpecifyCountry" == "y" || "$SpecifyCountry" == "Y" ]]
+then
+
+sed '/ipv6/d' $Authority.orig \
+| sed '/asn/d' \
+| sed '/^2/d' \
+| sed '/\*/d' \
+| sed -e '/allocated/d' \
+| sed -e '/available/d' \
+| sed '/reserved/d' \
+| sed -e "/$CountryShortName/!d" \
+| sed -e 's/ripencc|..|ipv4|//g' \
+| sed -e 's/ripencc||ipv4|//g' \
+| sed -e 's/afrinic|..|ipv4|//g' \
+| sed -e 's/afrinic||ipv4|//g' \
+| sed -e 's/lacnic|..|ipv4|//g' \
+| sed -e 's/lacnic||ipv4|//g' \
+| sed -e 's/arin|..|ipv4|//g' \
+| sed -e 's/arin||ipv4|//g' \
+| sed -e 's/apnic|..|ipv4|//g' \
+| sed -e 's/apnic||ipv4|//g' \
+| sed -e 's/|1|.*$/\/32/g' \
+| sed -e 's/|2|.*$/\/31/g' \
+| sed -e 's/|4|.*$/\/30/g' \
+| sed -e 's/|8|.*$/\/29/g' \
+| sed -e 's/|16|.*$/\/28/g' \
+| sed -e 's/|32|.*$/\/27/g' \
+| sed -e 's/|64|.*$/\/26/g' \
+| sed -e 's/|128|.*$/\/25/g' \
+| sed -e 's/|256|.*$/\/24/g' \
+| sed -e 's/|512|.*$/\/23/g' \
+| sed -e 's/|1024|.*$/\/22/g' \
+| sed -e 's/|2048|.*$/\/21/g' \
+| sed -e 's/|4096|.*$/\/20/g' \
+| sed -e 's/|8192|.*$/\/19/g' \
+| sed -e 's/|16384|.*$/\/18/g' \
+| sed -e 's/|32768|.*$/\/17/g' \
+| sed -e 's/|65536|.*$/\/16/g' \
+| sed -e 's/|131072|.*$/\/15/g' \
+| sed -e 's/|262144|.*$/\/14/g' \
+| sed -e 's/|524288|.*$/\/13/g' \
+| sed -e 's/|1048576|.*$/\/12/g' \
+| sed -e 's/|2097152|.*$/\/11/g' \
+| sed -e 's/|4194304|.*$/\/10/g' \
+| sed -e 's/|8388608|.*$/\/9/g' \
+| sed -e 's/|16777216|.*$/\/8/g' \
+| sed -e 's/|33554432|.*$/\/7/g' \
+| sed -e 's/|67108864|.*$/\/6/g' \
+| sed -e 's/|134217728|.*$/\/5/g' \
+| sed -e 's/|268435456|.*$/\/4/g' \
+| sed -e 's/|536870912|.*$/\/3/g' \
+| sed -e 's/|1073741824|.*$/\/2/g' \
+| sed -e 's/|2147483648|.*$/\/1/g' \
+| sed -e '/^.*|.*$/d' \
+>> $Authority.cidr
+
+else
 
 sed '/ipv6/d' $Authority.orig \
 | sed '/asn/d' \
@@ -163,8 +273,10 @@ sed '/ipv6/d' $Authority.orig \
 | sed -e 's/|536870912|.*$/\/3/g' \
 | sed -e 's/|1073741824|.*$/\/2/g' \
 | sed -e 's/|2147483648|.*$/\/1/g' \
-| sed -e '/^.*\|.*$/d' \
+| sed -e '/^.*|.*$/d' \
 >> $Authority.cidr
+
+fi
 
 echo "Creation of $Authority.cidr has finshed."
 
@@ -182,48 +294,48 @@ echo "Creation of $Authority.conf has started."
 
 lineTotal=$(wc -l $Authority.cidr | awk '{print $1}')
 
-echo $lineTotal
-
 lineCurrent=1
 
 while [ $lineCurrent -le $lineTotal ]; do
 
   sed -n "$lineCurrent p" $Authority.cidr \
 | sed "s/^/object network $Authority$lineCurrent\# subnet\ /" \
-| sed -e "s/\/0/\ 0\.0\.0\.0/" \
-| sed -e "s/\/1/\ 128\.0\.0\.0/" \
-| sed -e "s/\/2/\ 192\.0\.0\.0/" \
-| sed -e "s/\/3/\ 224\.0\.0\.0/" \
-| sed -e "s/\/4/\ 240\.0\.0\.0/" \
-| sed -e "s/\/5/\ 248\.0\.0\.0/" \
-| sed -e "s/\/6/\ 252\.0\.0\.0/" \
-| sed -e "s/\/7/\ 254\.0\.0\.0/" \
-| sed -e "s/\/8/\ 255\.0\.0\.0/" \
-| sed -e "s/\/9/\ 255\.128\.0\.0/" \
-| sed -e "s/\/10/\ 255\.192\.0\.0/" \
-| sed -e "s/\/11/\ 255\.224\.0\.0/" \
-| sed -e "s/\/12/\ 255\.240\.0\.0/" \
-| sed -e "s/\/13/\ 255\.248\.0\.0/" \
-| sed -e "s/\/14/\ 255\.252\.0\.0/" \
-| sed -e "s/\/15/\ 255\.254\.0\.0/" \
-| sed -e "s/\/16/\ 255\.255\.0\.0/" \
-| sed -e "s/\/17/\ 255\.255\.128\.0/" \
-| sed -e "s/\/18/\ 255\.255\.192\.0/" \
-| sed -e "s/\/19/\ 255\.255\.224\.0/" \
-| sed -e "s/\/20/\ 255\.255\.240\.0/" \
-| sed -e "s/\/21/\ 255\.255\.248\.0/" \
-| sed -e "s/\/22/\ 255\.255\.252\.0/" \
-| sed -e "s/\/23/\ 255\.255\.254\.0/" \
-| sed -e "s/\/24/\ 255\.255\.255\.0/" \
-| sed -e "s/\/25/\ 255\.255\.255\.128/" \
-| sed -e "s/\/26/\ 255\.255\.255\.192/" \
-| sed -e "s/\/27/\ 255\.255\.255\.224/" \
-| sed -e "s/\/28/\ 255\.255\.255\.240/" \
-| sed -e "s/\/29/\ 255\.255\.255\.248/" \
-| sed -e "s/\/30/\ 255\.255\.255\.252/" \
-| sed -e "s/\/32/\ 255\.255\.255\.255/" \
+| sed -e "s/\/0$/\ 0\.0\.0\.0/" \
+| sed -e "s/\/1$/\ 128\.0\.0\.0/" \
+| sed -e "s/\/2$/\ 192\.0\.0\.0/" \
+| sed -e "s/\/3$/\ 224\.0\.0\.0/" \
+| sed -e "s/\/4$/\ 240\.0\.0\.0/" \
+| sed -e "s/\/5$/\ 248\.0\.0\.0/" \
+| sed -e "s/\/6$/\ 252\.0\.0\.0/" \
+| sed -e "s/\/7$/\ 254\.0\.0\.0/" \
+| sed -e "s/\/8$/\ 255\.0\.0\.0/" \
+| sed -e "s/\/9$/\ 255\.128\.0\.0/" \
+| sed -e "s/\/10$/\ 255\.192\.0\.0/" \
+| sed -e "s/\/11$/\ 255\.224\.0\.0/" \
+| sed -e "s/\/12$/\ 255\.240\.0\.0/" \
+| sed -e "s/\/13$/\ 255\.248\.0\.0/" \
+| sed -e "s/\/14$/\ 255\.252\.0\.0/" \
+| sed -e "s/\/15$/\ 255\.254\.0\.0/" \
+| sed -e "s/\/16$/\ 255\.255\.0\.0/" \
+| sed -e "s/\/17$/\ 255\.255\.128\.0/" \
+| sed -e "s/\/18$/\ 255\.255\.192\.0/" \
+| sed -e "s/\/19$/\ 255\.255\.224\.0/" \
+| sed -e "s/\/20$/\ 255\.255\.240\.0/" \
+| sed -e "s/\/21$/\ 255\.255\.248\.0/" \
+| sed -e "s/\/22$/\ 255\.255\.252\.0/" \
+| sed -e "s/\/23$/\ 255\.255\.254\.0/" \
+| sed -e "s/\/24$/\ 255\.255\.255\.0/" \
+| sed -e "s/\/25$/\ 255\.255\.255\.128/" \
+| sed -e "s/\/26$/\ 255\.255\.255\.192/" \
+| sed -e "s/\/27$/\ 255\.255\.255\.224/" \
+| sed -e "s/\/28$/\ 255\.255\.255\.240/" \
+| sed -e "s/\/29$/\ 255\.255\.255\.248/" \
+| sed -e "s/\/30$/\ 255\.255\.255\.252/" \
+| sed -e "s/\/32$/\ 255\.255\.255\.255/" \
 | tr '#' '\n' \
 >> $Authority.conf
+
+  echo $lineCurrent
 
   ((lineCurrent++))
 
@@ -290,5 +402,7 @@ Menu
 VerifyAuthorityChoice
 AcquireList
 SetAuthority
+SpecifyCountry
+# SelectCountry
 ConvertAuthorityListToCIDR
 ConvertCIDRtoConfig
